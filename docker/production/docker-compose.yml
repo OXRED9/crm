@@ -1,14 +1,20 @@
 # Production stack for Frappe CRM.
 #
-# Unlike ../docker-compose.yml (which is a development bench that builds itself
-# at startup), this stack runs the prebuilt ghcr.io/frappe/crm image, so the web
-# service binds its port within seconds of boot instead of after a ~20 minute
-# `bench init`. That is what makes it survivable under a platform health check.
+# Unlike ../docker-compose.yml (which is a development bench that runs `bench
+# init` at container start), this stack ships an image with the app already
+# built, so the web service binds its port within seconds instead of after a
+# ~20 minute build. That is what makes it survivable under a health check.
 #
 # Copy .env.example to .env and edit it before deploying.
 
+# Built locally from ./Dockerfile rather than pulled. The published
+# ghcr.io/frappe/crm images do not contain the crm app -- see Dockerfile for the
+# full explanation. Every service shares one image; Compose builds it once.
 x-crm-image: &crm_image
-  image: ghcr.io/frappe/crm:${CRM_VERSION:-stable}
+  image: crm-local:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
 
 x-backend-env: &backend_env
   DB_HOST: db
@@ -57,9 +63,18 @@ services:
       # edit the left-hand number here.
       - "8052:8080"
     healthcheck:
+      # Probes /crm, not /api/method/ping. `ping` answers 200 as long as any
+      # site resolves, so it reports healthy even when the CRM app failed to
+      # install -- a site with no CRM on it returns 200 on ping and 404 on /crm.
+      #
+      # 403 counts as healthy: /crm requires a login, so an anonymous probe gets
+      # 403 when CRM *is* installed and 404 when it is not. Accepting 200 and
+      # 403 while rejecting 404 is what makes this check actually distinguish a
+      # working deploy from a broken one. http.client is used over urllib
+      # because it returns the status instead of raising on 4xx.
       test:
         - CMD-SHELL
-        - python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/method/ping')"
+        - python3 -c "import http.client,sys; c=http.client.HTTPConnection('localhost',8080,timeout=5); c.request('GET','/crm'); s=c.getresponse().status; sys.exit(0 if s in (200,403) else 1)"
       interval: 10s
       timeout: 5s
       retries: 12
@@ -76,7 +91,7 @@ services:
     environment: *backend_env
     volumes: *bench_volumes
     depends_on:
-      configurator:
+      create-site:
         condition: service_completed_successfully
     restart: unless-stopped
 
@@ -88,7 +103,7 @@ services:
       FRAPPE_REDIS_QUEUE: redis://redis-queue:6379
     volumes: *bench_volumes
     depends_on:
-      configurator:
+      create-site:
         condition: service_completed_successfully
     restart: unless-stopped
 
@@ -100,7 +115,7 @@ services:
       FRAPPE_REDIS_QUEUE: redis://redis-queue:6379
     volumes: *bench_volumes
     depends_on:
-      configurator:
+      create-site:
         condition: service_completed_successfully
     restart: unless-stopped
 
@@ -112,7 +127,7 @@ services:
       FRAPPE_REDIS_QUEUE: redis://redis-queue:6379
     volumes: *bench_volumes
     depends_on:
-      configurator:
+      create-site:
         condition: service_completed_successfully
     restart: unless-stopped
 
@@ -121,7 +136,7 @@ services:
     command: ["bench", "schedule"]
     volumes: *bench_volumes
     depends_on:
-      configurator:
+      create-site:
         condition: service_completed_successfully
     restart: unless-stopped
 
