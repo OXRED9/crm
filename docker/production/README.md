@@ -27,6 +27,20 @@ docker compose up -d
 Point the platform at `docker/production/docker-compose.yml`, and mark
 **`frontend`** as the primary service — it is the only one publishing a port.
 
+### Deploying from a platform that clones this repo
+
+`.env` is gitignored, so it does **not** exist in a fresh clone. Every variable
+therefore falls back to a default and the file parses without it — including
+`DB_ROOT_PASSWORD` and `ADMIN_PASSWORD`, which both default to `admin`.
+
+**Set them as environment variables in the platform's own settings UI before
+putting this on a public address.** Do not rely on the defaults.
+
+Defaults are used rather than Compose's `${VAR:?error}` required-variable syntax
+on purpose: `:?` aborts interpolation of the *entire* file when the variable is
+unset, so the platform sees zero services and zero ports rather than a helpful
+error.
+
 ## Health checks
 
 `frontend` has a Compose-level health check against `/api/method/ping` with a

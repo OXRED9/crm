@@ -13,8 +13,12 @@ x-crm-image: &crm_image
 x-backend-env: &backend_env
   DB_HOST: db
   DB_PORT: "3306"
-  MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
-  MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+  # These fall back to "admin" so the file still parses when no .env is present
+  # (a deploy platform clones the repo, and .env is gitignored). Override them
+  # via the platform's environment variable settings before exposing this
+  # publicly -- see README.md.
+  MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
+  MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
 
 x-bench-volumes: &bench_volumes
   - sites:/home/frappe/frappe-bench/sites
@@ -38,6 +42,10 @@ services:
       PROXY_READ_TIMEOUT: 120
       CLIENT_MAX_BODY_SIZE: 50m
     volumes: *bench_volumes
+    # Declared for platforms that discover the container port from `expose`
+    # rather than from a published `ports` mapping.
+    expose:
+      - "8080"
     ports:
       # nginx always listens on 8080 inside the container; only the published
       # port changes. Set CRM_HTTP_PORT to whatever the platform probes.
@@ -172,7 +180,7 @@ services:
     environment:
       <<: *backend_env
       SITE_NAME: ${SITE_NAME:-crm.localhost}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
     volumes: *bench_volumes
     depends_on:
       configurator:
@@ -187,8 +195,8 @@ services:
       - --skip-character-set-client-handshake
       - --skip-innodb-read-only-compressed
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
     volumes:
       - db-data:/var/lib/mysql
     healthcheck:
