@@ -62,11 +62,15 @@ Subsequent deploys are fast — `create-site` sees the existing site and exits.
 
 ## Port
 
-The platform health check in the failing deploy targeted **8052**, which is the
-default for `CRM_HTTP_PORT`. Inside the container nginx always listens on 8080;
-only the published port is configurable. If the platform assigns a port
-dynamically, set `CRM_HTTP_PORT` from its injected variable rather than
-hardcoding it.
+`frontend` publishes **`8052:8080`** as a literal in `docker-compose.yml`. Inside
+the container nginx always listens on 8080; change the public port by editing the
+left-hand number.
+
+Do not convert that mapping back into a variable such as
+`"${CRM_HTTP_PORT:-8052}:8080"`. Deploy platforms commonly scan the compose file
+with their own YAML parser to find the public entrypoint, and those parsers do
+not expand `${VAR:-default}` — the templated value reads as *no host port
+published* and the deploy is rejected before Docker is ever invoked.
 
 ## Host header
 

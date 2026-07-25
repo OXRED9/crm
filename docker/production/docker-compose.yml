@@ -47,9 +47,15 @@ services:
     expose:
       - "8080"
     ports:
-      # nginx always listens on 8080 inside the container; only the published
-      # port changes. Set CRM_HTTP_PORT to whatever the platform probes.
-      - "${CRM_HTTP_PORT:-8052}:8080"
+      # Written as a literal on purpose -- do NOT turn this back into
+      # "${CRM_HTTP_PORT:-8052}:8080". Deploy platforms that read the compose
+      # file with their own YAML parser do not expand ${VAR:-default}, so a
+      # templated value here reads as "no host port published" and the deploy is
+      # rejected before Docker ever sees it.
+      #
+      # Host 8052 -> nginx 8080 inside the container. To change the public port,
+      # edit the left-hand number here.
+      - "8052:8080"
     healthcheck:
       test:
         - CMD-SHELL
